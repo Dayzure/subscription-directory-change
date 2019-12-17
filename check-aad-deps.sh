@@ -63,7 +63,7 @@ function generate_report()
         report+="$trow"
     done
     report+=$repFooter
-    reportFileName = "report-${subscriptionId}.html"
+    reportFileName="report-${subscriptionId}.html"
     echo "$report" > $reportFileName
     echo "Download report from '/clouddrive/dirchange-${subscriptionId}/${reportFileName}'"
 }
