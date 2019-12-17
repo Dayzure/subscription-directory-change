@@ -47,7 +47,7 @@ The file `check-aad-deps.sh` runs and report on the following:
  * Resources with known Azure AD Tenant dependencies
  * Azure SQL Databases with configured Azure AD Authentication
  * Current RBAC assignments
- * Generates an HTML based report for the resources and gives a relative link for download
+ * Generates an HTML based report for the resources and gives a relative link for download ([you can download files from Cloud Shell](https://docs.microsoft.com/en-us/azure/cloud-shell/using-the-shell-window#upload-and-download-files))
  * Calls `dump-rbac.py` to save neccessary data
 
  ### Saving current RBAC data
