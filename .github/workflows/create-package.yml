@@ -1,0 +1,9 @@
+name: Create-Package
+on: [push]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@master
+    - name: Create Archive
+      run:  zip -r release.zip  . -x '*.git*' 'run.sh' 'subscription-dir-change.zip' 'readme.md'
