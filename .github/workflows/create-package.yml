@@ -6,4 +6,9 @@ jobs:
     steps:
     - uses: actions/checkout@master
     - name: Create Archive
-      run:  zip -r release.zip  . -x '*.git*' 'run.sh' 'subscription-dir-change.zip' 'readme.md'
+      run:  zip -r subscription-dir-change.zip  . -x '*.git*' 'run.sh' 'subscription-dir-change.zip' 'readme.md'
+    - name: Archive Package
+      uses: actions/upload-artifact@v1
+      with:
+        name: archive-package
+        path: subscription-dir-change.zip
