@@ -47,6 +47,7 @@ def process_rbac(rbacs, users, sps):
                 continue        
         elif assignment['principalType'] == "Group":
             print("Groups are not yet supported...")
+            continue
         rbacs_list.append(rbac_detail)
     return rbacs_list
 
