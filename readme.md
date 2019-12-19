@@ -60,7 +60,7 @@ The file `check-aad-deps.sh` runs and report on the following:
     * Service Principals are not preserved
     * Groups are not preserved
 
-In order to function correctly, the user running the script must be able to read all users and all service principals in current directory.
+> !Important: In order to function correctly, the user running the script must be able to read all users and all service principals in current directory.
 
 ## Restoring RBAC permissions
 After you have preserved the RBAC state and you changed the directory for subscription, it is time to restore RBAC assignments.
