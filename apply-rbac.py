@@ -69,6 +69,39 @@ def system_assigned_msi_recreate(resource_id, tenant_id):
             return sa_msi['principalId']
     return None
 
+def extract_principals_from_rbac_assignments(rbacs):
+    users_list = []
+    service_principals_list = []
+    for assignment in rbacs:
+        if assignment['scope'] == "/" or "managementGroups" in assignment['scope']:
+            continue
+        if assignment['principalType'] == "ServicePrincipal":
+            # fill the service_principals_list            
+            service_principals_list.append(assignment['principalId'])
+        elif assignment['principalType'] == "User":
+            # fill the users_list
+            users_list.append(assignment['principalId'])
+        elif assignment['principalType'] == "Group":
+            continue
+    users = get_assigned_users_from_aad(users_list)
+    service_principals = get_assigned_service_principals_from_aad(service_principals_list)
+    return {"users": users, "servicePrincipals": service_principals}
+
+def get_assigned_users_from_aad(principals_list):
+    if len(principals_list) < 1:
+        return []      
+    odata_filter = ""
+    for principal in principals_list:
+        if(len(odata_filter) < 5):
+            odata_filter = "objectId eq '{}'".format(principal)
+        else:
+            odata_filter += " or objectId eq '{}'".format(principal)
+    # logger.debug("odata filter: %s", odata_filter)
+    # logger.debug("calling az ad user list --filter ...")
+    principals_result = subprocess.run(["az", "ad", "user", "list", "--filter", odata_filter], stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True)
+    # logger.debug(user_result.stdout)
+    return json.loads(principals_result.stdout)
+
 def recreate_custom_rbac_roles():
     try:
         with open('rbac_custom_roles.json') as f:
@@ -128,6 +161,7 @@ def apply_rbac(rbacs, users, tenant_id):
     #     "principalEmail": "[null|user@email.com|service-principal-id]"
     # }
     print("Matching assignments ...")
+    users_and_service_principals = extract_principals_from_rbac_assignments(rbacs)
     for assignment in rbacs:
         new_assignment = {"role": assignment['roleName'], "assignee-object-id": None, "assignee-principal-type": None, "rg-name": None, "scope": assignment['scope']}
         if assignment['principalType'] == "ServicePrincipal":
@@ -149,7 +183,7 @@ def apply_rbac(rbacs, users, tenant_id):
             # handle user
             new_assignment['assignee-principal-type'] = "User"
             #print("User assignee found ...")
-            user = find_user_by_email(assignment['principalEmail'], users)
+            user = find_user_by_email(assignment['principalEmail'], users_and_service_principals['users'])
             if user is None:
                 print("Could not find user for assignment:")
                 print(assignment)
@@ -166,6 +200,7 @@ def apply_rbac(rbacs, users, tenant_id):
                 new_assignment['rg_name'] = scope_chunks[3]
         create_new_assignment(new_assignment)
 
+
 print("Getting current tenant id ...")
 tenant_id_result = subprocess.run(["az", "account", "show", "--query", "tenantId", "-o", "tsv"], stdout=PIPE, stderr=PIPE, universal_newlines=True)
 tenant_id = tenant_id_result.stdout.strip()
@@ -177,12 +212,6 @@ recreate_custom_rbac_roles()
 print("reading saved rbac assignments ...")
 with open('rbac.json') as f:
     rbacs = json.load(f)
-
-print("Getting users ...")
-user_result = subprocess.run(["az", "ad", "user", "list"], stdout=PIPE, stderr=PIPE, universal_newlines=True)
-
-print("Parsing results ...")
-users =  json.loads(user_result.stdout)
 
 apply_rbac(rbacs, users, tenant_id)
 
