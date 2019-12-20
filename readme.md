@@ -42,6 +42,26 @@ Just to be even shorter, I added the RAW URL to a short link:
 ```
 
 ## Generating report and saving current RBAC assignment
+
+In order to scrape all your RBAC assignments (and neccessary data about user and system assigned MSIs), just run the following command within a cloud shell (BASH):
+```
+  curl -L https://aka.ms/as/dirchange | bash
+```
+
+That will crawl the current active context. If you are using multiple subscriptions, be sure to first set the active context to the subscirption you want to scrape.
+You can achieve that by running the following command within Cloud Shell (BASH):
+
+```
+  az account set --subscription <name or id of the subscription>
+```
+
+### Quick process view
+
+![RBAC scraping video](./content/AzureDirChange-Scrape.gif)
+
+
+### Behind the scenes
+
 The file `check-aad-deps.sh` runs and report on the following:
 
  * Resources with known Azure AD Tenant dependencies
@@ -60,7 +80,9 @@ The file `check-aad-deps.sh` runs and report on the following:
     * Service Principals are not preserved
     * Groups are not preserved
 
-> !Important: In order to function correctly, the user running the script must be able to read all users and all service principals in current directory.
+> !Important: In order to function correctly, the user running the script must be able to read all users and all service principals in current directory. 
+> By default all users can enumerate user and service principal objects. But in certain situations and Azure AD settings, it may be that your user
+> cannot read other objects. If this is the case, work out with the administrator of Azure AD tenant.
 
 ## Restoring RBAC permissions
 After you have preserved the RBAC state and you changed the directory for subscription, it is time to restore RBAC assignments.

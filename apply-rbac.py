@@ -1,6 +1,8 @@
 #!/usr/bin/python
 import subprocess, json, sys, os, time
 from subprocess import PIPE
+from distutils import log as logger
+logger.set_verbosity(logger.INFO)
 
 def find_user_by_email(email,users_list):
     """ Find user by given e-mail address.
@@ -13,7 +15,7 @@ def find_user_by_email(email,users_list):
         compare_value = user['userPrincipalName']
         if "#EXT#" in user['userPrincipalName']:
             compare_value = user['mail']
-        if email == compare_value:
+        if email.lower() == compare_value.lower():
             return user['objectId']
     return None
 
@@ -70,22 +72,34 @@ def system_assigned_msi_recreate(resource_id, tenant_id):
     return None
 
 def extract_principals_from_rbac_assignments(rbacs):
+    users = []
     users_list = []
     service_principals_list = []
+    i = 0
     for assignment in rbacs:
         if assignment['scope'] == "/" or "managementGroups" in assignment['scope']:
             continue
-        if assignment['principalType'] == "ServicePrincipal":
-            # fill the service_principals_list            
-            service_principals_list.append(assignment['principalId'])
-        elif assignment['principalType'] == "User":
+        if assignment['principalType'] == "User":
             # fill the users_list
-            users_list.append(assignment['principalId'])
-        elif assignment['principalType'] == "Group":
+            users_list.append(assignment['principalEmail'])
+            i += 1
+            if i % 7 == 0:
+                # get this set of users and reset counters and lists
+                temp_users = get_assigned_users_from_aad(users_list)
+                users += temp_users
+                del users_list[:]
+                del temp_users[:]
+        else:
+            # skip service principals and groups
+            # as we do not handle those in current version
             continue
-    users = get_assigned_users_from_aad(users_list)
-    service_principals = get_assigned_service_principals_from_aad(service_principals_list)
-    return {"users": users, "servicePrincipals": service_principals}
+    if len(users_list) > 0 and len(users_list) < 7:
+        # process the last set of users objects
+        temp_users = get_assigned_users_from_aad(users_list)
+        users += temp_users
+        del users_list[:]
+        del temp_users[:]
+    return users
 
 def get_assigned_users_from_aad(principals_list):
     if len(principals_list) < 1:
@@ -93,13 +107,14 @@ def get_assigned_users_from_aad(principals_list):
     odata_filter = ""
     for principal in principals_list:
         if(len(odata_filter) < 5):
-            odata_filter = "objectId eq '{}'".format(principal)
+            # userPrincipalName eq 'azure@idcxp.site' or otherMails/any(c:c+eq+'anton@staykov.net')
+            odata_filter = "userPrincipalName eq '{0}' or otherMails/any(c:c eq '{0}')".format(principal)
         else:
-            odata_filter += " or objectId eq '{}'".format(principal)
-    # logger.debug("odata filter: %s", odata_filter)
-    # logger.debug("calling az ad user list --filter ...")
+            odata_filter += "or userPrincipalName eq '{0}' or otherMails/any(c:c eq '{0}')".format(principal)
+    #logger.debug("odata filter: %s", odata_filter)
+    #logger.debug("calling az ad user list --filter ...")
     principals_result = subprocess.run(["az", "ad", "user", "list", "--filter", odata_filter], stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True)
-    # logger.debug(user_result.stdout)
+    #logger.debug(principals_result.stdout)
     return json.loads(principals_result.stdout)
 
 def recreate_custom_rbac_roles():
@@ -144,7 +159,7 @@ def create_new_assignment(assignment):
         print(result.stdout)
         print("---------------------")
 
-def apply_rbac(rbacs, users, tenant_id):
+def apply_rbac(rbacs, tenant_id):
     """ Apply the RBAC permissions
         Loop through saved ones and check for users, system assigned and user assigned MSIs
         custom roles are already re-created at respective levels
@@ -161,7 +176,7 @@ def apply_rbac(rbacs, users, tenant_id):
     #     "principalEmail": "[null|user@email.com|service-principal-id]"
     # }
     print("Matching assignments ...")
-    users_and_service_principals = extract_principals_from_rbac_assignments(rbacs)
+    users = extract_principals_from_rbac_assignments(rbacs)
     for assignment in rbacs:
         new_assignment = {"role": assignment['roleName'], "assignee-object-id": None, "assignee-principal-type": None, "rg-name": None, "scope": assignment['scope']}
         if assignment['principalType'] == "ServicePrincipal":
@@ -183,7 +198,7 @@ def apply_rbac(rbacs, users, tenant_id):
             # handle user
             new_assignment['assignee-principal-type'] = "User"
             #print("User assignee found ...")
-            user = find_user_by_email(assignment['principalEmail'], users_and_service_principals['users'])
+            user = find_user_by_email(assignment['principalEmail'], users)
             if user is None:
                 print("Could not find user for assignment:")
                 print(assignment)
@@ -213,7 +228,7 @@ print("reading saved rbac assignments ...")
 with open('rbac.json') as f:
     rbacs = json.load(f)
 
-apply_rbac(rbacs, users, tenant_id)
+apply_rbac(rbacs, tenant_id)
 
 
 ##############################################
@@ -225,3 +240,17 @@ apply_rbac(rbacs, users, tenant_id)
 ### update system assigned msi             ###
 ##############################################
 # az resource update --set identity.type="SystemAssigned" --ids /subscriptions/8c8ddf2b-cafa-420f-a182-04fb50f51d68/resourceGroups/compute-rg/providers/Microsoft.Compute/virtualMachines/ubnt
+
+#################################################
+### Graph can only handle up to 15 OR clauses ###
+#################################################
+# {
+#     "error": {
+#         "code": "Request_UnsupportedQuery",
+#         "message": "Too many child clauses specified in search filter expression containing 'OR' operators: 18. Max allowed: 15.",
+#         "innerError": {
+#             "request-id": "dfdb141e-1c9c-48b0-b5be-844411cb9110",
+#             "date": "2019-12-20T12:22:11"
+#         }
+#     }
+# }
