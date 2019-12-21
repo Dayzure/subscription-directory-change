@@ -55,7 +55,7 @@ You can achieve that by running the following command within Cloud Shell (BASH):
   az account set --subscription <name or id of the subscription>
 ```
 
-### Quick process view
+### Quick scraping process view
 
 ![RBAC scraping video](./content/AzureDirChange-Scrape.gif)
 
@@ -107,3 +107,7 @@ The script will:
     * For User objects it will look based on the saved e-mail attriube. First looking at `upn`, then in `mail` property.
     * For user assigned managed identities, it will create the user assigned MSI in the new tenant in the same resource group and assign respective role.
     * For system assigned managed identiies, it will update the resource that have system assigned MSI and will assign respective role 
+
+### Quick apply process view
+
+![RBAC apply video](./content/AzureDirChange-apply.gif)
