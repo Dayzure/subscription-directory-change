@@ -47,20 +47,20 @@ def process_rbac(rbacs):
                 logger.info('Found ghost assigment for principal which will be cleaned up... ')
                 continue
         elif assignment['principalType'] == "User":
-            logger.debug("Search for user: %s", assignment['principalId'])
+            #logger.debug("Search for user: %s", assignment['principalId'])
             user = find_object(assignment['principalId'],users_and_service_principals['users'])
             if user is not None:
                 if user['userType'] == "Member" or user['userType'] is None:
                     # Users created before intorduction of B2B Collaboration are marked with None for user type
                     rbac_detail['principalEmail'] = user['mail']
                 else:           
-                    logger.debug("Users neither member nor none: %s %s", user['userType'], user['userPrincipalName'])         
+                    #logger.debug("Users neither member nor none: %s %s", user['userType'], user['userPrincipalName'])         
                     rbac_detail['principalEmail'] = user['otherMails'][0]
             else:
                 logger.info("Found ghost assigment for user which will be cleaned up: %s", assignment)
                 continue        
         elif assignment['principalType'] == "Group":
-            logger.info("Groups are not yet supported...")
+            logger.info("Groups are not supported for RBAC migration...")
             continue
         rbacs_list.append(rbac_detail)
     return rbacs_list
@@ -73,21 +73,34 @@ def write_custom_roles():
         json.dump(custom_roles, f)
 
 def extract_principals_from_rbac_assignments(rbacs):
+    users = []
+    service_principals = []
     users_list = []
     service_principals_list = []
+    iusr = 0
+    isp = 0
     for assignment in rbacs:
         if assignment['scope'] == "/" or "managementGroups" in assignment['scope']:
             continue
         if assignment['principalType'] == "ServicePrincipal":
             # fill the service_principals_list            
+            isp +=1
             service_principals_list.append(assignment['principalId'])
+            if isp % 15 == 0:
+                service_principals += get_assigned_service_principals_from_aad(service_principals_list)
+                del service_principals_list[:]
         elif assignment['principalType'] == "User":
             # fill the users_list
+            iusr += 1
             users_list.append(assignment['principalId'])
+            if iusr % 15 == 0:
+                # get this set of users and reset counters and lists
+                users += get_assigned_users_from_aad(users_list)
+                del users_list[:]
         elif assignment['principalType'] == "Group":
             continue
-    users = get_assigned_users_from_aad(users_list)
-    service_principals = get_assigned_service_principals_from_aad(service_principals_list)
+    users += get_assigned_users_from_aad(users_list)
+    service_principals += get_assigned_service_principals_from_aad(service_principals_list)
     return {"users": users, "servicePrincipals": service_principals}
 
 def get_assigned_users_from_aad(principals_list):
