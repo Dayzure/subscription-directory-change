@@ -110,4 +110,4 @@ The script will:
 
 ### Quick apply process view
 
-![RBAC apply video](./content/AzureDirChange-apply.gif)
+![RBAC apply video](./content/AzureDirChange-Apply.gif)
