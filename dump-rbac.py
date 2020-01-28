@@ -1,5 +1,5 @@
 #!/usr/bin/python
-import subprocess, json
+import subprocess, json, csv
 from distutils import log as logger
 logger.set_verbosity(logger.INFO)
 
@@ -11,18 +11,19 @@ def find_object(objectId,objectsList):
 
 def process_rbac(rbacs):  
     rbacs_list = []
-    users_and_service_principals = extract_principals_from_rbac_assignments(rbacs)
+    users_groups_and_service_principals = extract_principals_from_rbac_assignments(rbacs)
     for assignment in rbacs:
         if assignment['scope'] == "/" or "managementGroups" in assignment['scope']:
             logger.info("Ignoring root scope (root management group) and management group scopes")
             continue
-        rbac_detail = {"principalEmail": None, "principalType": None, "scope": None, "roleName": None, "managedIdentityReosurceId": None, "msiType": None}
+        rbac_detail = {"principalEmail": None, "principalType": None, "scope": None, "roleName": None, "managedIdentityReosurceId": None, "msiType": None, "principalId": None}
         rbac_detail['principalType'] = assignment['principalType']
         rbac_detail['roleName'] = assignment['roleDefinitionName']
         rbac_detail['scope'] = assignment['scope']
+        rbac_detail['principalId'] = assignment['principalId']
         if assignment['principalType'] == "ServicePrincipal":
             logger.debug("Search for service principal:  %s", assignment['principalId'])
-            sp = find_object(assignment['principalId'],users_and_service_principals['servicePrincipals'])
+            sp = find_object(assignment['principalId'],users_groups_and_service_principals['servicePrincipals'])
             if sp is not None:
                 if sp['servicePrincipalType'] == "ManagedIdentity":
                     if len(sp['alternativeNames']) > 1:
@@ -48,7 +49,7 @@ def process_rbac(rbacs):
                 continue
         elif assignment['principalType'] == "User":
             #logger.debug("Search for user: %s", assignment['principalId'])
-            user = find_object(assignment['principalId'],users_and_service_principals['users'])
+            user = find_object(assignment['principalId'],users_groups_and_service_principals['users'])
             if user is not None:
                 if user['userType'] == "Member" or user['userType'] is None:
                     # Users created before intorduction of B2B Collaboration are marked with None for user type
@@ -60,8 +61,9 @@ def process_rbac(rbacs):
                 logger.info("Found ghost assigment for user which will be cleaned up: %s", assignment)
                 continue        
         elif assignment['principalType'] == "Group":
-            logger.info("Groups are not supported for RBAC migration...")
-            continue
+            group = find_object(assignment['principalId'],users_groups_and_service_principals['groups'])
+            if group is not None:
+                rbac_detail["principalEmail"] = group["displayName"]
         rbacs_list.append(rbac_detail)
     return rbacs_list
 
@@ -75,10 +77,13 @@ def write_custom_roles():
 def extract_principals_from_rbac_assignments(rbacs):
     users = []
     service_principals = []
+    groups = []
     users_list = []
     service_principals_list = []
+    groups_list = []
     iusr = 0
     isp = 0
+    igrp = 0
     for assignment in rbacs:
         if assignment['scope'] == "/" or "managementGroups" in assignment['scope']:
             continue
@@ -95,15 +100,22 @@ def extract_principals_from_rbac_assignments(rbacs):
             users_list.append(assignment['principalId'])
             if iusr % 15 == 0:
                 # get this set of users and reset counters and lists
-                users += get_assigned_users_from_aad(users_list)
+                users += get_assigned_users_or_groups_from_aad(users_list, "user")
                 del users_list[:]
         elif assignment['principalType'] == "Group":
-            continue
-    users += get_assigned_users_from_aad(users_list)
+            # fill the group_list
+            igrp += 1
+            groups_list.append(assignment['principalId'])
+            if igrp % 15 == 0:
+                # get the set of groups and reset counters and lists
+                groups += get_assigned_users_or_groups_from_aad(groups_list, "group")
+                del groups_list[:]
+    users += get_assigned_users_or_groups_from_aad(users_list, "user")
     service_principals += get_assigned_service_principals_from_aad(service_principals_list)
-    return {"users": users, "servicePrincipals": service_principals}
+    groups += get_assigned_users_or_groups_from_aad(groups_list, "group")
+    return {"users": users, "servicePrincipals": service_principals, "groups": groups}
 
-def get_assigned_users_from_aad(principals_list):
+def get_assigned_users_or_groups_from_aad(principals_list, usergroup):
     if len(principals_list) < 1:
         return []      
     odata_filter = ""
@@ -114,7 +126,7 @@ def get_assigned_users_from_aad(principals_list):
             odata_filter += " or objectId eq '{}'".format(principal)
     # logger.debug("odata filter: {}", odata_filter)
     # logger.debug("calling az ad user list --filter ...")
-    principals_result = subprocess.run(["az", "ad", "user", "list", "--filter", odata_filter], stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True)
+    principals_result = subprocess.run(["az", "ad", usergroup, "list", "--filter", odata_filter], stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True)
     # logger.debug(user_result.stdout)
     return json.loads(principals_result.stdout)
 
@@ -133,6 +145,19 @@ def get_assigned_service_principals_from_aad(principals_list):
     # logger.debug(user_result.stdout)
     return json.loads(principals_result.stdout)
 
+def write_groups_csv(rbacs, filename):
+    with open(filename, 'w') as csvfile:
+        fieldnames = ['GroupName', 'GroupObjectId', 'NewGroupObjectId']
+        writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+
+        writer.writeheader()
+        for assignment in rbacs:
+            if assignment['scope'] == "/" or "managementGroups" in assignment['scope']:
+                logger.info("Ignoring root scope (root management group) and management group scopes")
+                continue
+            if assignment['principalType'] == "Group":
+                logger.info(assignment)
+                writer.writerow({'GroupName': assignment['principalEmail'], 'GroupObjectId':assignment['principalId'], 'NewGroupObjectId':' '})
 
 write_custom_roles()
 
@@ -146,3 +171,5 @@ extract_principals_from_rbac_assignments(rbacs)
 rbacs_list = process_rbac(rbacs)
 with open('rbac.json', 'w') as f:
     json.dump(rbacs_list, f)
+
+write_groups_csv(rbacs_list, "groups_mapping.csv")
