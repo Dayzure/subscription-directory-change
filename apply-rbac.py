@@ -1,7 +1,9 @@
 #!/usr/bin/python
-import subprocess, json, sys, os, time
+import subprocess, json, sys, os, time, csv
 from subprocess import PIPE
 from distutils import log as logger
+from pathlib import Path
+
 logger.set_verbosity(logger.INFO)
 
 def find_user_by_email(email,users_list):
@@ -101,6 +103,14 @@ def extract_principals_from_rbac_assignments(rbacs):
         del temp_users[:]
     return users
 
+def extract_new_groupid_from_group_mapping(groupid, groupmap):
+    target_group_id = None
+    for grp in groupmap:
+        if grp['GroupId'] == groupid:
+            target_group_id = grp['TargetGroupId']
+            break
+    return target_group_id
+
 def get_assigned_users_from_aad(principals_list):
     if len(principals_list) < 1:
         return []      
@@ -159,7 +169,7 @@ def create_new_assignment(assignment):
         print(result.stdout)
         print("---------------------")
 
-def apply_rbac(rbacs, tenant_id):
+def apply_rbac(rbacs, groups, tenant_id):
     """ Apply the RBAC permissions
         Loop through saved ones and check for users, system assigned and user assigned MSIs
         custom roles are already re-created at respective levels
@@ -206,14 +216,43 @@ def apply_rbac(rbacs, tenant_id):
                 continue
             else:
                 new_assignment['assignee-object-id'] = user
-        else:
-            print("We do not handle groups")
-            continue
+        elif assignment['principalType'] == 'Group':
+            print("checking group mapping")
+            group_id = assignment['principalId']
+            new_assignment['assignee-principal-type'] = "Group"
+            target_group_id = extract_new_groupid_from_group_mapping(group_id, groups)
+            if target_group_id is not None:
+                new_assignment['assignee-object-id'] = target_group_id
+            else:
+                print("Could not find group mapping for assignment: ")
+                print(assignment)
+                continue
         if "resourceGroups" in assignment['scope']:
             scope_chunks = assignment['scope'].split('/')
             if len(scope_chunks) == 4:
                 new_assignment['rg_name'] = scope_chunks[3]
         create_new_assignment(new_assignment)
+
+def read_group_mappings(filename):
+    groups_map = []
+    home = str(Path.home())
+    file = home + "/" + filename
+    if Path(file).is_file():
+        print ("found uploaded groups_mapping.csv  taking it ...")
+    else:
+        return groups_map
+    with open(file, 'r') as csvfile:
+        sample = csvfile.read(512)
+        has_header = csv.Sniffer().has_header(sample)
+        deduced_dialect = csv.Sniffer().sniff(sample)
+    with open(file, 'r') as csvfile:
+        reader = csv.reader(csvfile, deduced_dialect)
+        next(reader)
+        for row in reader:
+            #print(row)
+            group_detail = { "GroupName": row[0], "GroupId": row[1], "TargetGroupId": row[2] }
+            groups_map.append(group_detail)
+    return groups_map
 
 
 print("Getting current tenant id ...")
@@ -221,14 +260,16 @@ tenant_id_result = subprocess.run(["az", "account", "show", "--query", "tenantId
 tenant_id = tenant_id_result.stdout.strip()
 print(tenant_id)
 
-print("recreating custom RBAC roles...")
-recreate_custom_rbac_roles()
+#print("recreating custom RBAC roles...")
+#recreate_custom_rbac_roles()
 
 print("reading saved rbac assignments ...")
 with open('rbac.json') as f:
     rbacs = json.load(f)
-
-apply_rbac(rbacs, tenant_id)
+print("reading groups mapping")
+groups = read_group_mappings("groups_mapping.csv")
+print(groups)
+apply_rbac(rbacs, groups, tenant_id)
 
 
 ##############################################

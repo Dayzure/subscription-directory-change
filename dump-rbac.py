@@ -156,7 +156,6 @@ def write_groups_csv(rbacs, filename):
                 logger.info("Ignoring root scope (root management group) and management group scopes")
                 continue
             if assignment['principalType'] == "Group":
-                logger.info(assignment)
                 writer.writerow({'GroupName': assignment['principalEmail'], 'GroupObjectId':assignment['principalId'], 'NewGroupObjectId':' '})
 
 write_custom_roles()
