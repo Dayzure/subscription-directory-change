@@ -202,7 +202,7 @@ def apply_rbac(rbacs, groups, tenant_id):
             else:
                 # handle regular SP
                 new_assignment['assignee-principal-type'] = "ServicePrincipal"
-                print("Regular Service Principal found ... skipping?")
+                print("Skipping regular Service Principal.")
                 continue
         elif assignment['principalType'] == 'User':
             # handle user
@@ -238,7 +238,7 @@ def read_group_mappings(filename):
     home = str(Path.home())
     file = home + "/" + filename
     if Path(file).is_file():
-        print ("found uploaded groups_mapping.csv  taking it ...")
+        print ("found uploaded groups_mapping.csv taking it ...")
     else:
         return groups_map
     with open(file, 'r') as csvfile:
@@ -255,7 +255,7 @@ def read_group_mappings(filename):
     return groups_map
 
 
-print("Getting current tenant id ...")
+print("Getting current tenant id.")
 tenant_id_result = subprocess.run(["az", "account", "show", "--query", "tenantId", "-o", "tsv"], stdout=PIPE, stderr=PIPE, universal_newlines=True)
 tenant_id = tenant_id_result.stdout.strip()
 print(tenant_id)
