@@ -53,7 +53,11 @@ def process_rbac(rbacs):
             if user is not None:
                 if user['userType'] == "Member" or user['userType'] is None:
                     # Users created before intorduction of B2B Collaboration are marked with None for user type
-                    rbac_detail['principalEmail'] = user['mail']
+                    if user['mail'] is None or len(user['mail']) < 4:
+                        # fix for users without email (GitHub #6)
+                        rbac_detail['principalEmail'] = user['userPrincipalName']
+                    else:
+                        rbac_detail['principalEmail'] = user['mail']
                 else:           
                     #logger.debug("Users neither member nor none: %s %s", user['userType'], user['userPrincipalName'])         
                     rbac_detail['principalEmail'] = user['otherMails'][0]
