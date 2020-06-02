@@ -150,17 +150,23 @@ def get_assigned_service_principals_from_aad(principals_list):
     return json.loads(principals_result.stdout)
 
 def write_groups_csv(rbacs, filename):
+    filtered_groups = {}
+    # first normalize assignments into unique groups dictionary
+    # (GitHub #5)
+    for assignment in rbacs:
+        if assignment['scope'] == "/" or "managementGroups" in assignment['scope']:
+                logger.info("Ignoring root scope (root management group) and management group scopes")
+                continue
+        if assignment['principalType'] == "Group":
+            filtered_groups[assignment['principalId']] = assignment['principalEmail']
+
     with open(filename, 'w') as csvfile:
         fieldnames = ['GroupName', 'GroupObjectId', 'NewGroupObjectId']
         writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
 
         writer.writeheader()
-        for assignment in rbacs:
-            if assignment['scope'] == "/" or "managementGroups" in assignment['scope']:
-                logger.info("Ignoring root scope (root management group) and management group scopes")
-                continue
-            if assignment['principalType'] == "Group":
-                writer.writerow({'GroupName': assignment['principalEmail'], 'GroupObjectId':assignment['principalId'], 'NewGroupObjectId':' '})
+        for k,v in filtered_groups.items():
+                writer.writerow({'GroupName': v, 'GroupObjectId':k, 'NewGroupObjectId':' '})
 
 write_custom_roles()
 
