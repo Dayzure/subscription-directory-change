@@ -111,3 +111,48 @@ The script will:
 ### Quick apply process view
 
 ![RBAC apply video](./content/AzureDirChange-Apply.gif)
+
+## Check for recent (up to 90 days) activites from service principals in your subscription
+
+Currently we do not support backing-up and restoring of RBAC assignments for regular service principals (managed identities are covered).
+This is partially because migrating service principals is not a trivial task. 
+However we have added an addtional bash script to help you identify if any of the assgined service principals (on whatever scope) has performed
+any action over your Azure resources. The script can be found in this repository under [sp-activity-check.sh](./sp-activity-check.sh). The usage is as simple as:
+
+```bash
+  ./sp-activity-check.sh 10
+```
+
+where `10` is the number of days we want to look at historically. The script will iterate over all service principal assignments and check if any of the assigned
+service principals has performed managent action on your resources.
+Results will look similar to this one:
+
+```
+  anton@Azure:~/clouddrive$ ./sp-activity-check.sh 90
+  Checking for Service Principal assignments on your resources
+  --------------------------------------------
+
+  Looping over service principal assignments:
+  --------------------------------------------------------
+  (Only the top 1) activity for 1daa1537-f386-408c-90da-3cc36964a315 (aks-manager, Application)
+  [
+    {
+      "caller": "1daa1537-f386-408c-90da-3cc36964a315",
+      "category": "Administrative",
+      "operation": "Create/Update Storage Account",
+      "provider": null,
+      "resource": "/subscriptions/401a2b4d-bfc6-4016-9ac3-a81bb74c52e6/resourcegroups/aks-manager-managed-rg/providers/Microsoft.Storage/storageAccounts/aksmanagercreated",
+      "resourceGroup": "aks-manager-managed-rg",
+      "resourceType": "Microsoft.Storage/storageAccounts"
+    }
+  ]
+  ---------------------------------------------------------------------
+  (Only the top 1) activity for 1e55edaf-275e-497b-9bc1-039a1096710c (None, ManagedIdentity, /subscriptions/401a2b4d-bfc6-4016-9ac3-a81bb74c52e6/resourcegroups/rg-dayzure/providers/Microsoft.Web/sites/dayzure, isExplicit=False)
+  []
+  ---------------------------------------------------------------------
+```
+
+Displaying an empty array (`[]`) after the service principal identifier means that this service principal has not performed any actions during the chosen period.
+Displaying anything else will show the most recent action that the service principal has performed.
+
+This is also an opportunity to clean out any assignments that are not being used.
