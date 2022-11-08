@@ -3,7 +3,7 @@
 Any organization or individual who is managing Azure environments and potentially have the need to change their directory tenant.
 
 ## Background
-Directory change for an Azure Subscription ([official documentation](https://docs.microsoft.com/en-us/azure/active-directory/fundamentals/active-directory-how-subscriptions-associated-directory)) may be very complex task and must be executed with caution.
+Directory change for an Azure Subscription ([official documentation](https://bit.ly/3EeCSZ6)) may be very complex task and must be executed with caution.
 This project focuses on analysing deployed Azure resources that are known to depend on the home tenant of your Azure Subscription. 
 Because resource types in Azure are constantly evolving and new are added on a fast pace, the project cannot catch all and everything.
 However we are doing our best to update content based on real customer experiences.
