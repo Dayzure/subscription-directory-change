@@ -147,7 +147,7 @@ def get_assigned_users_from_entra_id(principals_list):
     # logger.debug("odata filter: {}", odata_filter)
     # logger.debug(odata_filter)
     # logger.debug("calling az ad user list --filter ...")
-    principals_result = subprocess.run(["az", "rest", "--method", "get", "--uri", "https://graph.microsoft.com/v1.0/users/?$select=id,userPrincipalName,mail,mailNickname,userType&$filter={}".format(odata_filter)], stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True)
+    principals_result = subprocess.run(["az", "rest", "--method", "get", "--uri", "https://graph.microsoft.com/v1.0/users/?$select=id,userPrincipalName,mail,mailNickname,userType,otherMails&$filter={}".format(odata_filter),"--query","\"value\""], stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True)
     # logger.debug(principals_result.stdout)
     return json.loads(principals_result.stdout)
 
