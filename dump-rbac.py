@@ -5,7 +5,7 @@ logger.set_verbosity(logger.INFO)
 
 def find_object(objectId,objectsList):
   for listItem in objectsList:
-    if listItem['objectId'] == objectId:
+    if listItem['id'] == objectId:
         return listItem
   return None
 
@@ -104,7 +104,7 @@ def extract_principals_from_rbac_assignments(rbacs):
             users_list.append(assignment['principalId'])
             if iusr % 15 == 0:
                 # get this set of users and reset counters and lists
-                users += get_assigned_users_or_groups_from_aad(users_list, "user")
+                users += get_assigned_users_from_entra_id(users_list)
                 del users_list[:]
         elif assignment['principalType'] == "Group":
             # fill the group_list
@@ -114,7 +114,7 @@ def extract_principals_from_rbac_assignments(rbacs):
                 # get the set of groups and reset counters and lists
                 groups += get_assigned_users_or_groups_from_aad(groups_list, "group")
                 del groups_list[:]
-    users += get_assigned_users_or_groups_from_aad(users_list, "user")
+    users += get_assigned_users_from_entra_id(users_list)
     service_principals += get_assigned_service_principals_from_aad(service_principals_list)
     groups += get_assigned_users_or_groups_from_aad(groups_list, "group")
     return {"users": users, "servicePrincipals": service_principals, "groups": groups}
@@ -122,29 +122,48 @@ def extract_principals_from_rbac_assignments(rbacs):
 def get_assigned_users_or_groups_from_aad(principals_list, usergroup):
     if len(principals_list) < 1:
         return []      
-    odata_filter = ""
+    odata_filter = "_"
     for principal in principals_list:
         if(len(odata_filter) < 5):
-            odata_filter = "objectId eq '{}'".format(principal)
+            odata_filter = "id eq '{}'".format(principal)
         else:
-            odata_filter += " or objectId eq '{}'".format(principal)
+            odata_filter += " or id eq '{}'".format(principal)
     # logger.debug("odata filter: {}", odata_filter)
+    # logger.debug(odata_filter)
     # logger.debug("calling az ad user list --filter ...")
     principals_result = subprocess.run(["az", "ad", usergroup, "list", "--filter", odata_filter], stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True)
     # logger.debug(user_result.stdout)
     return json.loads(principals_result.stdout)
 
+def get_assigned_users_from_entra_id(principals_list):
+    if len(principals_list) < 1:
+        return []      
+    odata_filter = "_"
+    for principal in principals_list:
+        if(len(odata_filter) < 5):
+            odata_filter = "id eq '{}'".format(principal)
+        else:
+            odata_filter += " or id eq '{}'".format(principal)
+    # logger.debug("odata filter: {}", odata_filter)
+    # logger.debug(odata_filter)
+    # logger.debug("calling az ad user list --filter ...")
+    principals_result = subprocess.run(["az", "rest", "--method", "get", "--uri", "https://graph.microsoft.com/v1.0/users/?$select=id,userPrincipalName,mail,mailNickname,userType&$filter={}".format(odata_filter)], stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True)
+    # logger.debug(principals_result.stdout)
+    return json.loads(principals_result.stdout)
+
+
 def get_assigned_service_principals_from_aad(principals_list):
     if len(principals_list) < 1:
         return []      
-    odata_filter = ""
+    odata_filter = "_"
     for principal in principals_list:
         if(len(odata_filter) < 5):
-            odata_filter = "objectId eq '{}'".format(principal)
+            odata_filter = "id eq '{}'".format(principal)
         else:
-            odata_filter += " or objectId eq '{}'".format(principal)
+            odata_filter += " or id eq '{}'".format(principal)
     # logger.debug("odata filter: {}", odata_filter)
-    # logger.debug("calling az ad user list --filter ...")
+    # logger.debug(odata_filter)
+    # logger.debug("calling az ad sp list --filter ...")
     principals_result = subprocess.run(["az", "ad", "sp", "list", "--all", "--filter", odata_filter], stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True)
     # logger.debug(user_result.stdout)
     return json.loads(principals_result.stdout)
