@@ -96,7 +96,7 @@ This folder has been created by the first run of the script.
 Run the `apply-rbac.py` by executing the following command:
 
 ```
- ./apply-rbax.py
+ ./apply-rbac.py
 ```
 
 The script will:
