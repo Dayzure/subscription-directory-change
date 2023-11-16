@@ -19,7 +19,7 @@ function check_directory_dependencies() {
     az graph query -q 'resources | where type != "microsoft.azureactivedirectory/b2cdirectories" | where  identity <> "" or properties.tenantId <> "" or properties.encryptionSettingsCollection.enabled == true | project name, type, kind, identity, tenantId, properties.tenantId' --subscriptions $subscriptionId --output table
 
     echo " "
-    echo "Azure SQL Servers with Azrue AD Authentication"
+    echo "Azure SQL Servers with Azure AD Authentication"
     echo "----------------------------------------------"
     az sql server ad-admin list --ids $(az graph query -q 'resources | where type == "microsoft.sql/servers" | project id' -o tsv | cut -f1)
 
